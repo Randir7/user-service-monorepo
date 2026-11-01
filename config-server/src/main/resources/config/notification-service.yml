@@ -81,6 +81,8 @@ app:
 # окружения EUREKA_CLIENT_SERVICEURL_DEFAULTZONE.
 eureka:
   client:
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://eureka-server:8761/eureka/}
     register-with-eureka: true
     fetch-registry: true
 
