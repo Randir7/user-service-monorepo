@@ -1,0 +1,214 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!--
+        Родительский POM Spring Boot: управляемые версии зависимостей,
+        настроенные плагины компиляции и тестирования.
+        Версии стартеров ниже не указываются именно благодаря родителю.
+    -->
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.5.0</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.github.Randir7</groupId>
+    <artifactId>notification-service</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <name>notification-service</name>
+    <description>Микросервис почтовых уведомлений по событиям Kafka</description>
+
+    <properties>
+        <java.version>17</java.version>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <testcontainers.version>1.21.4</testcontainers.version>
+        <!-- GreenMail не управляется BOM Spring Boot, версия указывается явно -->
+        <greenmail.version>2.1.3</greenmail.version>
+        <spring-cloud.version>2025.0.0</spring-cloud.version>
+    </properties>
+
+    <dependencies>
+        <!--
+            WEB: REST API прямой отправки уведомлений (Этап 5).
+            Даёт встроенный Tomcat, Spring MVC, Jackson.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!--
+            VALIDATION: Bean Validation для DTO запросов (@NotBlank, @Email).
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <!--
+            MAIL: стартер почтовой отправки.
+            Добавляет spring-context-support и jakarta.mail, а автоконфигурация
+            Spring Boot создаёт бин JavaMailSender на основе свойств spring.mail.*.
+            Никаких ручных Session/Properties из классического JavaMail API.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+
+        <!--
+            KAFKA: потребитель событий из топиков user-created / user-deleted.
+            Даёт @KafkaListener, фабрики консьюмера, автоконфигурацию
+            десериализаторов из свойств spring.kafka.consumer.*.
+        -->
+        <dependency>
+            <groupId>org.springframework.kafka</groupId>
+            <artifactId>spring-kafka</artifactId>
+        </dependency>
+
+        <!-- Lombok: @Slf4j для логирования без boilerplate. -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- ==================== ТЕСТЫ ==================== -->
+
+        <!--
+            Базовый тестовый стартер: JUnit 5, Mockito, AssertJ, MockMvc,
+            TestRestTemplate и AWAITILITY (ожидание асинхронных условий).
+            Awaitility нужен для интеграционных тестов: письмо приходит асинхронно,
+            и проверять его наличие нужно умным ожиданием, а не Thread.sleep.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Интеграция Testcontainers со Spring Boot (@ServiceConnection). -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!-- Расширение JUnit 5 для управления контейнерами (@Testcontainers). -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!--
+            Модуль Testcontainers с KafkaContainer: тестовый брокер Kafka
+            в Docker-контейнере, изолированный от dev-инфраструктуры.
+        -->
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>kafka</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <!--
+            GreenMail: почтовый сервер-заглушка внутри JVM для тестов.
+            Поднимает настоящий SMTP-сервер на тестовом порту, принимает
+            письма и раскладывает их по виртуальным ящикам, которые
+            тест затем читает и проверяет. Docker для почты не нужен.
+        -->
+        <dependency>
+            <groupId>com.icegreen</groupId>
+            <artifactId>greenmail-junit5</artifactId>
+            <version>${greenmail.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-config</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-bootstrap</artifactId>
+        </dependency>
+
+        <!--
+    EUREKA CLIENT: клиентская часть Service Discovery.
+
+    При старте приложение регистрируется в Eureka Server, отправляет heartbeat
+    каждые 30 секунд и скачивает таблицу реестра для локального кэша.
+    Это позволяет другим сервисам находить notification-service по имени,
+    а не по фиксированному адресу.
+-->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
+
+        <!--
+    RESILIENCE4J: библиотека для паттернов устойчивости (Circuit Breaker,
+    Retry, Rate Limiter, Bulkhead, TimeLimiter).
+
+    resilience4j-spring-boot3 — интеграция со Spring Boot 3.x:
+    автоконфигурация, аннотации @CircuitBreaker, @Retry, @RateLimiter.
+-->
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-spring-boot3</artifactId>
+        </dependency>
+
+        <!--
+            SPRING BOOT STARTER AOP: необходим для работы аннотаций @CircuitBreaker.
+            Resilience4j использует AOP-прокси для перехвата вызовов методов.
+        -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-aop</artifactId>
+        </dependency>
+
+        <!--
+            RESILIENCE4J METRICS: метрики Circuit Breaker для Actuator.
+            Позволяет видеть состояние через /actuator/circuitbreakers.
+        -->
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-micrometer</artifactId>
+        </dependency>
+
+    </dependencies>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

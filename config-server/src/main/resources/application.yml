@@ -1,0 +1,33 @@
+server:
+  port: 8888  # Стандартный порт Config Server
+
+spring:
+  application:
+    name: config-server
+
+  cloud:
+    config:
+      server:
+        # -----------------------------------------------------------------------
+        # NATIVE PROFILE: конфиги хранятся в файловой системе.
+        #
+        # Альтернатива — git-бэкенд (spring.cloud.config.server.git.uri),
+        # но для учебного проекта native проще: не нужен отдельный git-репозиторий,
+        # конфиги лежат рядом с кодом Config Server.
+        #
+        # search-locations указывает, где искать файлы конфигов.
+        # classpath:config/ = src/main/resources/config/ внутри JAR.
+        # -----------------------------------------------------------------------
+        native:
+          search-locations: classpath:/config
+
+  # Активируем native profile по умолчанию
+  profiles:
+    active: native
+
+# Actuator для health-check
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

@@ -1,0 +1,81 @@
+# ============================================================================
+# КОНФИГУРАЦИЯ USER-SERVICE (хранится в Config Server)
+# ============================================================================
+# ВНИМАНИЕ: адреса инфраструктуры (PostgreSQL, Kafka) НЕ указываются здесь.
+# Они передаются через переменные окружения в docker-compose.yml,
+# чтобы конфиг работал и локально (localhost), и в docker-сети (postgres:5432).
+# ============================================================================
+
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    open-in-view: false
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    default-property-inclusion: non_null
+
+app:
+  kafka:
+    topic-user-created: user-created
+    topic-user-deleted: user-deleted
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+    disable-swagger-default-url: true
+  paths-to-match: /api/v1/**
+
+# ----------------------------------------------------------------------------
+# EUREKA CLIENT
+# ----------------------------------------------------------------------------
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    instance-id: ${spring.application.name}:${server.port}
+    prefer-ip-address: true
+
+# ----------------------------------------------------------------------------
+# RESILIENCE4J
+# ----------------------------------------------------------------------------
+resilience4j:
+  circuitbreaker:
+    instances:
+      kafkaPublisher:
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+        record-exceptions:
+          - org.apache.kafka.common.KafkaException
+          - java.util.concurrent.TimeoutException
+    metrics:
+      enabled: true
+
+  retry:
+    instances:
+      kafkaPublisher:
+        max-attempts: 3
+        wait-duration: 1s
+
+logging:
+  level:
+    com.github.randir7.userservice: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.springframework: INFO
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,circuitbreakers
