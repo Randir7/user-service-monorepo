@@ -1,0 +1,60 @@
+# ============================================================================
+# ТЕСТОВАЯ КОНФИГУРАЦИЯ
+# ============================================================================
+# Этот файл используется ТОЛЬКО при запуске тестов (src/test/resources).
+# Содержит все свойства, необходимые для работы сервисов в тестах,
+# без зависимости от Config Server.
+# ============================================================================
+
+spring:
+  application:
+    name: user-service
+
+  # DataSource для тестов (использует Testcontainers PostgreSQL)
+  datasource:
+    url: jdbc:tc:postgresql:16-alpine:///testdb
+    username: test
+    password: test
+    driver-class-name: org.testcontainers.jdbc.ContainerlessJdbcDatabaseDriver
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    open-in-view: false
+
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    default-property-inclusion: non_null
+
+  # Kafka для тестов (использует Testcontainers Kafka)
+  kafka:
+    bootstrap-servers: ${spring.embedded.kafka.brokers:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+  # Отключение Eureka Client в тестах
+  cloud:
+    config:
+      enabled: false
+
+# Свойства приложения (дублирование из Config Server для тестов)
+app:
+  kafka:
+    topic-user-created: user-created-test
+    topic-user-deleted: user-deleted-test
+
+# Логирование для тестов (меньше шума)
+logging:
+  level:
+    com.github.randir7.userservice: WARN
+    org.springframework: WARN
+    org.hibernate: WARN
+    org.apache.kafka: WARN
+
+# Отключение Swagger в тестах (не нужен)
+springdoc:
+  api-docs:
+    enabled: false

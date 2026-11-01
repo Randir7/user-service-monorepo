@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+                             http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.5.0</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>com.github.Randir7</groupId>
+    <artifactId>api-gateway</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <name>api-gateway</name>
+    <description>Единая точка входа: роутинг запросов к микросервисам</description>
+
+    <properties>
+        <java.version>17</java.version>
+        <spring-cloud.version>2025.0.0</spring-cloud.version>
+        <!-- Та же версия springdoc, что и в user-service: единый Swagger UI -->
+        <springdoc.version>2.8.9</springdoc.version>
+    </properties>
+
+    <dependencies>
+        <!--
+            SPRING CLOUD GATEWAY: реактивный прокси-сервер на Netty/WebFlux.
+            НЕ совмещается со spring-boot-starter-web в одном приложении:
+            два конкурирующих веб-стека сломают автоконфигурацию сервера.
+        -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-gateway</artifactId>
+        </dependency>
+
+        <!--
+            EUREKA CLIENT: шлюз резолвит имена сервисов (lb://user-service)
+            через реестр, а не через фиксированные адреса.
+        -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
+        </dependency>
+
+        <!-- Config Client + bootstrap: конфиг шлюза хранится в Config Server -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-config</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-bootstrap</artifactId>
+        </dependency>
+
+        <!--
+            SPRINGDOC WEBFLUX UI: Swagger UI для реактивного стека.
+            Обычный webmvc-вариант springdoc здесь НЕ подходит:
+            в classpath нет Spring MVC. UI отдаёт агрегированные
+            спецификации всех сервисов через dropdown (настройка ниже).
+        -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webflux-ui</artifactId>
+            <version>${springdoc.version}</version>
+        </dependency>
+
+        <!-- Actuator: health-эндпоинт для мониторинга и docker-compose -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+    </dependencies>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>

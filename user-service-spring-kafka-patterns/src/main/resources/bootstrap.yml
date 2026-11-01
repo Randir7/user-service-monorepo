@@ -1,0 +1,25 @@
+# ============================================================================
+# BOOTSTRAP КОНФИГУРАЦИЯ (читается ДО application.yml)
+# ============================================================================
+#
+# Bootstrap context стартует РАНЬШЕ основного application context.
+# Здесь указываются настройки, необходимые для подключения к Config Server:
+# имя приложения (для поиска конфига) и адрес Config Server.
+#
+# После получения конфига из Config Server он MERGE'ится с локальным
+# application.yml (приоритет у Config Server).
+# ============================================================================
+
+spring:
+  application:
+    name: user-service  # Имя, по которому Config Server найдёт user-service.yml
+
+  cloud:
+    config:
+      uri: http://localhost:8888  # Адрес Config Server
+      fail-fast: false
+      retry:
+        max-attempts: 10
+        initial-interval: 1000
+        multiplier: 1.5
+        max-interval: 5000

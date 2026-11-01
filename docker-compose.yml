@@ -1,0 +1,192 @@
+  # ============================================================================
+  # ПОЛНАЯ ИНФРАСТРУКТУРА МИКРОСЕРВИСНОЙ СИСТЕМЫ
+  # ============================================================================
+  # Запуск всех компонентов одним командой: docker compose up -d
+  #
+  # Архитектура:
+  #   Клиент → API Gateway (8080) → [user-service (8081), notification-service (8082)]
+  #                                    ↓
+  #                              Eureka Server (8761) ← Config Server (8888)
+  #
+  # Инфраструктура: PostgreSQL, Kafka, Mailpit
+  # ============================================================================
+
+  services:
+    # --------------------------------------------------------------------------
+    # ИНФРАСТРУКТУРА: базы данных и брокеры сообщений
+    # --------------------------------------------------------------------------
+
+    # PostgreSQL для user-service
+    postgres:
+      image: postgres:16-alpine
+      container_name: user-service-postgres
+      environment:
+        POSTGRES_DB: user_service
+        POSTGRES_USER: postgres
+        POSTGRES_PASSWORD: postgres
+      ports:
+        - "5432:5432"
+      volumes:
+        - postgres_data:/var/lib/postgresql/data
+      healthcheck:
+        test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+        interval: 10s
+        timeout: 5s
+        retries: 5
+
+    # Apache Kafka для событий
+    kafka:
+      image: confluentinc/cp-kafka:7.5.0
+      container_name: user-service-kafka
+      environment:
+        KAFKA_NODE_ID: 1
+        KAFKA_PROCESS_ROLES: broker,controller
+        KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+        KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+        KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+        KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+        KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
+        KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+        KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+        KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+        KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+        CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      ports:
+        - "9092:9092"
+      healthcheck:
+        test: [ "CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092" ]
+        interval: 10s
+        timeout: 5s
+        retries: 5
+
+    # Mailpit для тестирования почты
+    mailpit:
+      image: axllent/mailpit:latest
+      container_name: user-service-mailpit
+      ports:
+        - "1025:1025"  # SMTP
+        - "8025:8025"  # Web UI
+      healthcheck:
+        test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8025" ]
+        interval: 10s
+        timeout: 5s
+        retries: 5
+
+    # --------------------------------------------------------------------------
+    # INFRASTRUCTURE SERVICES: Config Server и Eureka Server
+    # --------------------------------------------------------------------------
+
+    # Config Server: централизованное хранилище конфигураций
+    config-server:
+      build:
+        context: ./config-server
+        dockerfile: Dockerfile
+      container_name: config-server
+      ports:
+        - "8888:8888"
+      environment:
+        - SPRING_PROFILES_ACTIVE=native
+      healthcheck:
+        test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8888/actuator/health" ]
+        interval: 10s
+        timeout: 5s
+        retries: 5
+      depends_on:
+        postgres:
+          condition: service_healthy
+        kafka:
+          condition: service_healthy
+
+    # Eureka Server: реестр сервисов (Service Discovery)
+    eureka-server:
+      build:
+        context: ./eureka-server
+        dockerfile: Dockerfile
+      container_name: eureka-server
+      ports:
+        - "8761:8761"
+      environment:
+        - EUREKA_CLIENT_REGISTER_WITH_EUREKA=false
+        - EUREKA_CLIENT_FETCH_REGISTRY=false
+      healthcheck:
+        test: [ "CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8761/actuator/health" ]
+        interval: 10s
+        timeout: 5s
+        retries: 5
+      depends_on:
+        config-server:
+          condition: service_healthy
+
+    # --------------------------------------------------------------------------
+    # APPLICATION SERVICES: бизнес-логика
+    # --------------------------------------------------------------------------
+
+    # API Gateway: единая точка входа
+    api-gateway:
+      build:
+        context: ./api-gateway
+        dockerfile: Dockerfile
+      container_name: api-gateway
+      ports:
+        - "8080:8080"
+      environment:
+        - SPRING_CLOUD_CONFIG_URI=http://config-server:8888
+        - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
+      depends_on:
+        eureka-server:
+          condition: service_healthy
+        config-server:
+          condition: service_healthy
+
+    # User Service: управление пользователями
+    user-service:
+      build:
+        context: ./user-service-spring-kafka-patterns
+        dockerfile: Dockerfile
+      container_name: user-service
+      ports:
+        - "8081:8081"
+      environment:
+        - SPRING_CLOUD_CONFIG_URI=http://config-server:8888
+        - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
+        - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/user_service
+        - SPRING_DATASOURCE_USERNAME=postgres
+        - SPRING_DATASOURCE_PASSWORD=postgres
+        - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      depends_on:
+        postgres:
+          condition: service_healthy
+        kafka:
+          condition: service_healthy
+        eureka-server:
+          condition: service_healthy
+        config-server:
+          condition: service_healthy
+      restart: on-failure:5
+
+    # Notification Service: отправка уведомлений
+    notification-service:
+      build:
+        context: ./notification-service-patterns
+        dockerfile: Dockerfile
+      container_name: notification-service
+      ports:
+        - "8082:8082"
+      environment:
+        - SPRING_CLOUD_CONFIG_URI=http://config-server:8888
+        - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
+        - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+        - SPRING_MAIL_HOST=mailpit
+        - SPRING_MAIL_PORT=1025
+      depends_on:
+        kafka:
+          condition: service_healthy
+        mailpit:
+          condition: service_healthy
+        eureka-server:
+          condition: service_healthy
+        config-server:
+          condition: service_healthy
+
+  volumes:
+    postgres_data:

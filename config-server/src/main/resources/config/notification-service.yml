@@ -1,0 +1,124 @@
+# ============================================================================
+# КОНФИГУРАЦИЯ NOTIFICATION-SERVICE (хранится в Config Server)
+# ============================================================================
+#
+# ВАЖНЫЙ ПРИНЦИП: здесь только то, что ОДИНАКОВО для всех окружений.
+#
+# Адреса инфраструктуры (Kafka, SMTP, Eureka) НЕ указываются в Config Server —
+# они передаются через переменные окружения в docker-compose.yml:
+#   SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092      (в docker)
+#   SPRING_MAIL_HOST=mailpit                       (в docker)
+#   EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=...       (в docker)
+#
+# Для локальной разработки эти же адреса задаются при запуске из IDE
+# или через локальный application.yml. Это позволяет одному и тому же
+# конфигу из Config Server работать и в docker, и на машине разработчика.
+#
+# Если адреса оставить в Config Server, они переопределят переменные
+# окружения (из-за особенностей приоритета PropertySource в Spring Cloud
+# Config), и сервис не сможет подключиться к инфраструктуре в docker-сети.
+# ============================================================================
+
+spring:
+  # -------------------------------------------------------------------------
+  # KAFKA CONSUMER: настройки, которые НЕ зависят от окружения.
+  #
+  # Адрес брокера (bootstrap-servers) НЕ указан здесь: он приходит
+  # из переменной окружения SPRING_KAFKA_BOOTSTRAP_SERVERS и может быть
+  # localhost:9092 (локально), kafka:9092 (docker) или реальным доменом (prod).
+  # -------------------------------------------------------------------------
+  kafka:
+    consumer:
+      # Группа консьюмеров. Kafka хранит для неё собственную позицию чтения.
+      group-id: notification-service
+
+      # С какой позиции начинать чтение новой группе (без сохранённого offset).
+      auto-offset-reset: earliest
+
+      # Десериализаторы: JSON-строки разбираются вручную в UserEventConsumer.
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+  # -------------------------------------------------------------------------
+  # ПОЧТА (SMTP): настройки, которые НЕ зависят от окружения.
+  #
+  # Адрес и порт (host, port) НЕ указаны здесь: они приходят из переменных
+  # окружения SPRING_MAIL_HOST и SPRING_MAIL_PORT.
+  # -------------------------------------------------------------------------
+  mail:
+    # Mailpit не требует аутентификации и шифрования — оба флага отключены.
+    # В production здесь появятся auth: true, starttls: true с учётными данными
+    # из секретов окружения (через SPRING_MAIL_USERNAME / SPRING_MAIL_PASSWORD).
+    properties:
+      mail:
+        smtp:
+          auth: false
+          starttls:
+            enable: false
+
+# -------------------------------------------------------------------------
+# СОБСТВЕННЫЕ СВОЙСТВА ПРИЛОЖЕНИЯ (префикс app)
+# -------------------------------------------------------------------------
+app:
+  kafka:
+    # Имена топиков-источников. Зеркальны свойствам user-service:
+    # оба сервиса должны сходиться в именах контракта.
+    topic-user-created: user-created
+    topic-user-deleted: user-deleted
+
+  notification:
+    # Название сайта для текста письма. Вынесено в конфигурацию:
+    # при ребрендинге не нужно перекомпилировать приложение.
+    site-name: My Super Site
+
+    # Адрес отправителя (заголовок From письма).
+    from: no-reply@my-super-site.local
+
+# -------------------------------------------------------------------------
+# EUREKA CLIENT
+# -------------------------------------------------------------------------
+# defaultZone НЕ указан здесь — адрес Eureka передаётся через переменную
+# окружения EUREKA_CLIENT_SERVICEURL_DEFAULTZONE.
+eureka:
+  client:
+    register-with-eureka: true
+    fetch-registry: true
+
+  instance:
+    # Идентификатор инстанса: имя приложения + порт.
+    instance-id: ${spring.application.name}:${server.port}
+    # Показывать IP-адрес вместо hostname в консоли Eureka.
+    prefer-ip-address: true
+
+# -------------------------------------------------------------------------
+# RESILIENCE4J: защита SMTP-вызовов от каскадных отказов
+# -------------------------------------------------------------------------
+resilience4j:
+  circuitbreaker:
+    instances:
+      emailSender:
+        # 5 последних вызовов анализируются; 50% ошибок → circuit открывается.
+        sliding-window-size: 5
+        failure-rate-threshold: 50
+        # В OPEN-состоянии circuit ждёт 30 секунд перед переходом в HALF_OPEN.
+        wait-duration-in-open-state: 30s
+        # В HALF_OPEN допускаются 2 пробных вызова для проверки SMTP.
+        permitted-number-of-calls-in-half-open-state: 2
+        automatic-transition-from-open-to-half-open-enabled: true
+        record-exceptions:
+          - org.springframework.mail.MailException
+          - jakarta.mail.MessagingException
+    metrics:
+      enabled: true
+
+  retry:
+    instances:
+      emailSender:
+        # 2 попытки с интервалом 2 секунды при временных сбоях SMTP.
+        max-attempts: 2
+        wait-duration: 2s
+
+logging:
+  level:
+    com.github.randir7.notificationservice: DEBUG
+    org.springframework.kafka: INFO

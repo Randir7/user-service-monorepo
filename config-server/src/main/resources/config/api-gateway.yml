@@ -1,0 +1,84 @@
+# ============================================================================
+# КОНФИГУРАЦИЯ API GATEWAY (хранится в Config Server)
+# ============================================================================
+
+spring:
+  cloud:
+    gateway:
+      # ---------------------------------------------------------------------
+      # МАРШРУТЫ: правило "какой запрос куда отправить".
+      #
+      # uri: lb://<имя> — префикс lb означает load balanced: адрес резолвится
+      # через Eureka по логическому имени сервиса. Если у сервиса несколько
+      # инстансов, запросы распределяются между ними (round-robin).
+      #
+      # predicates: условия запроса. Path=... — совпадение пути.
+      # ---------------------------------------------------------------------
+      routes:
+        # --- Бизнес-маршруты ---
+        - id: user-service
+          uri: lb://user-service
+          predicates:
+            - Path=/api/v1/users/**
+
+        - id: notification-service
+          uri: lb://notification-service
+          predicates:
+            - Path=/api/v1/notifications/**
+
+        # --- Маршруты Swagger-спецификаций для агрегации ---
+        # Swagger UI шлюза запрашивает /<имя>/v3/api-docs, а RewritePath
+        # срезает префикс имени: на сервис уходит чистый /v3/api-docs.
+        - id: user-service-docs
+          uri: lb://user-service
+          predicates:
+            - Path=/user-service/v3/api-docs
+          filters:
+            - RewritePath=/user-service/(?<segment>.*), /$\{segment}
+
+
+      # ---------------------------------------------------------------------
+      # ГЛОБАЛЬНЫЙ CORS: разрешает браузерным фронтендам с других origin
+      # обращаться к шлюзу. Настроено один раз здесь — сервисам не нужно
+      # знать о CORS вовсе.
+      #
+      # Ключ '[/**]' взят в кавычки: без них YAML интерпретировал бы /**
+      # как начало комментария/структуры.
+      # ---------------------------------------------------------------------
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowed-origins: "*"
+            allowed-methods: "*"
+            allowed-headers: "*"
+
+  # ---------------------------------------------------------------------------
+  # EUREKA CLIENT: шлюз и регистрируется сам, и скачивает реестр —
+  # ему нужны адреса сервисов для lb://-резолвинга.
+  # ---------------------------------------------------------------------------
+  eureka:
+    client:
+      service-url:
+        defaultZone: http://localhost:8761/eureka/
+      register-with-eureka: true
+      fetch-registry: true
+    instance:
+      instance-id: ${spring.application.name}:${server.port}
+      prefer-ip-address: true
+
+# ----------------------------------------------------------------------------
+# АГРЕГАЦИЯ SWAGGER: dropdown в Swagger UI шлюза со спецификациями
+# всех сервисов. URL относительные: браузер запрашивает их у шлюза,
+# а шлюз проксирует их маршрутами *-docs выше.
+# ----------------------------------------------------------------------------
+springdoc:
+  swagger-ui:
+    urls:
+      - name: user-service
+        url: /user-service/v3/api-docs
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
