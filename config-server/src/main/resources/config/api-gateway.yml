@@ -56,13 +56,15 @@ spring:
   # EUREKA CLIENT: шлюз и регистрируется сам, и скачивает реестр —
   # ему нужны адреса сервисов для lb://-резолвинга.
   # ---------------------------------------------------------------------------
-  eureka:
-    client:
-      register-with-eureka: true
-      fetch-registry: true
-    instance:
-      instance-id: ${spring.application.name}:${server.port}
-      prefer-ip-address: true
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://eureka-server:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    instance-id: ${spring.application.name}:${server.port}
+    prefer-ip-address: true
 
 # ----------------------------------------------------------------------------
 # АГРЕГАЦИЯ SWAGGER: dropdown в Swagger UI шлюза со спецификациями
