@@ -4,6 +4,7 @@ import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.info.License;
+import io.swagger.v3.oas.models.servers.Server;
 import io.swagger.v3.oas.models.tags.Tag;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -26,6 +27,11 @@ import java.util.List;
  * все теги, которые будут использованы в аннотациях {@code @Tag} контроллеров,
  * описываются в одном месте. Это обеспечивает единый стиль описаний
  * и предотвращает дублирование.
+ *
+ * <p><b>КРИТИЧЕСКИ ВАЖНО:</b> мы жестко задаем URL сервера как адрес API Gateway
+ * (http://localhost:8080). Без этого Springdoc автоопределит внутренний IP
+ * Docker-контейнера (например, 172.19.0.8:8081), и Swagger UI будет пытаться
+ * стучаться напрямую в контейнер, получая ошибки CORS или Network Failure.
  */
 @Configuration
 public class OpenApiConfig {
@@ -40,6 +46,16 @@ public class OpenApiConfig {
     @Bean
     public OpenAPI customOpenAPI() {
         return new OpenAPI()
+                // -----------------------------------------------------------
+                // servers — список серверов API.
+                // Жестко задаем Gateway как единственный сервер.
+                // Это критично для работы Swagger UI через Gateway!
+                // -----------------------------------------------------------
+                .servers(List.of(
+                        new Server()
+                                .url("http://localhost:8080")
+                                .description("API Gateway")
+                ))
                 // -----------------------------------------------------------
                 // info — главный раздел документации: что это за API.
                 // Отображается в верхней части Swagger UI.
