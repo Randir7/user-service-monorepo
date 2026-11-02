@@ -63,6 +63,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(UserController.class)
 @Import(UserDtoResourceMapper.class)
 @ActiveProfiles("test")  // Использует application.yml из test/resources
+@TestPropertySource(properties = {
+        "eureka.client.enabled=false",
+        "spring.cloud.config.enabled=false"
+})
 class UserControllerTest {
     
     @Autowired

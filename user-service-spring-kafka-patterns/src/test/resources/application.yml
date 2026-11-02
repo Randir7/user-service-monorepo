@@ -35,10 +35,14 @@ spring:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
 
-  # Отключение Eureka Client в тестах
+  # Отключение Cloud Config и Eureka Client в тестах
   cloud:
     config:
       enabled: false
+
+eureka:
+  client:
+    enabled: false
 
 # Свойства приложения (дублирование из Config Server для тестов)
 app:
